@@ -38,7 +38,7 @@ function App() {
     formData.append('image', fileInputRef.current.files[0]);
 
     try {
-      const response = await fetch('http://localhost:5000/upload', {
+      const response = await fetch('http://localhost:5000/api/ImageRecognition/upload', {
         method: 'POST',
         body: formData,
       });
