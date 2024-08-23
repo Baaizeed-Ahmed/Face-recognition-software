@@ -2,6 +2,7 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -26,7 +27,11 @@ namespace EmployeeRecognitionApi.Controllers
         public async Task<IActionResult> UploadImage([FromForm] IFormFile image)
         {
             if (image == null || image.Length == 0)
-                return BadRequest("No image provided.");
+            {
+                var response = new { message = "No image provided.", time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") };
+                Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(response));  // Log the response
+                return BadRequest(response);
+            }
 
             byte[] uploadedImageData;
             try
@@ -35,7 +40,9 @@ namespace EmployeeRecognitionApi.Controllers
             }
             catch
             {
-                return BadRequest("Invalid image format or processing error.");
+                var response = new { message = "Invalid image format or processing error.", time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") };
+                Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(response));  // Log the response
+                return BadRequest(response);
             }
 
             foreach (var filePath in Directory.GetFiles(_imagesDir))
@@ -52,11 +59,25 @@ namespace EmployeeRecognitionApi.Controllers
 
                 if (uploadedImageData.SequenceEqual(storedImageData))
                 {
-                    return Ok(new { message = "Employee recognized" });
+                    string employeeName = Path.GetFileNameWithoutExtension(filePath);
+                    var response = new
+                    {
+                        message = $"Access granted to {employeeName}",
+                        time = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                        name = employeeName
+                    };
+                    Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(response));  // Log the response
+                    return Ok(response);
                 }
             }
 
-            return Ok(new { message = "Unrecognized person" });
+            var unrecognizedResponse = new
+            {
+                message = "Unrecognized person\nSecurity has been alerted!"
+                time = DateTime.Now.ToLongDateString()
+            };
+            Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(unrecognizedResponse));  // Log the response
+            return Ok(unrecognizedResponse);
         }
 
         private async Task<byte[]> ConvertImageToByteArrayAsync(IFormFile image)
