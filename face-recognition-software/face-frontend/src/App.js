@@ -5,7 +5,8 @@ function App() {
   const [isModelLoading, setIsModelLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState(null);
   const [result, setResult] = useState('');
-  
+  const [details, setDetails] = useState('');
+
   const imageRef = useRef();
   const fileInputRef = useRef();
 
@@ -23,14 +24,10 @@ function App() {
     fileInputRef.current.click();
   };
 
-  const loadModel = async () => {
+  useEffect(() => {
     setIsModelLoading(true);
     // Simulating model load (if needed in future)
     setIsModelLoading(false);
-  };
-
-  useEffect(() => {
-    loadModel();
   }, []);
 
   const handleImageRecognition = async () => {
@@ -38,16 +35,23 @@ function App() {
     formData.append('image', fileInputRef.current.files[0]);
 
     try {
-      const response = await fetch('http://localhost:5000/upload', {
-        method: 'POST',
-        body: formData,
-      });
+        const response = await fetch('http://localhost:5000/api/ImageRecognition/upload', {
+            method: 'POST',
+            body: formData,
+        });
 
-      const data = await response.json();
-      setResult(data.message);
+        const data = await response.json();
+        console.log(data);  // Debug line to inspect the response
+
+        setResult(data.message);
+        setDetails(`Time: ${data.time}`);
+        if (data.name) {
+            setDetails(prevDetails => `${prevDetails}, Name: ${data.name}`);
+        }
     } catch (error) {
-      console.error('Error:', error);
-      setResult('An error occurred. Please try again.');
+        console.error('Error:', error);
+        setResult('An error occurred. Please try again.');
+        setDetails('');
     }
   };
 
@@ -88,6 +92,7 @@ function App() {
         {result && (
           <div className="resultMessage">
             <p>{result}</p>
+            <p>{details}</p>
           </div>
         )}
       </div>
