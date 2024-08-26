@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using faceApi.Services;
 using System;
 using System.IO;
 using System.Linq;
@@ -13,17 +11,20 @@ namespace faceApi.Controllers
     [ApiController]
     public class ImageRecognitionController : ControllerBase
     {
-        private readonly string _imagesDir = Path.Combine(Directory.GetCurrentDirectory(), "Images");
+        private readonly string _imagesDir;
+        private readonly ImageProcessingService _imageProcessingService;
 
-        public ImageRecognitionController()
+        public ImageRecognitionController(ImageProcessingService imageProcessingService)
         {
+            _imagesDir = Path.Combine(Directory.GetCurrentDirectory(), "Images");
+            _imageProcessingService = imageProcessingService;
+
             if (!Directory.Exists(_imagesDir))
             {
                 Directory.CreateDirectory(_imagesDir);
             }
         }
 
-        // Handle the preflight OPTIONS request for CORS
         [HttpOptions("upload")]
         public IActionResult PreflightUpload()
         {
@@ -40,89 +41,69 @@ namespace faceApi.Controllers
 
             if (image == null || image.Length == 0)
             {
-                var response = new { message = "No image provided.", time = currentTime };
-                Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(response));  // Log the response
-                return BadRequest(response);
+                return BadRequest(new { message = "No image provided.", time = currentTime });
             }
 
             byte[] uploadedImageData;
             try
             {
-                uploadedImageData = await ConvertImageToByteArrayAsync(image);
+                uploadedImageData = await _imageProcessingService.ConvertImageToByteArrayAsync(image);
             }
             catch (Exception ex)
             {
-                var response = new { message = "Invalid image format or processing error.", time = currentTime };
-                Console.WriteLine($"Error: {ex.Message}\n{Newtonsoft.Json.JsonConvert.SerializeObject(response)}");  // Log the response and error
-                return BadRequest(response);
+                Console.WriteLine($"Error: {ex.Message}");
+                return BadRequest(new { message = "Invalid image format or processing error.", time = currentTime });
             }
 
             try
             {
-                foreach (var filePath in Directory.GetFiles(_imagesDir))
+                var recognizedEmployee = await RecognizeEmployeeAsync(uploadedImageData, currentTime);
+                if (recognizedEmployee != null)
                 {
-                    byte[] storedImageData;
-                    try
-                    {
-                        storedImageData = await ConvertImageToByteArrayAsync(filePath);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error processing file '{filePath}': {ex.Message}"); // Log the error and continue
-                        continue; // Skip this file if there's an issue processing it.
-                    }
-
-                    if (uploadedImageData.SequenceEqual(storedImageData))
-                    {
-                        string employeeName = Path.GetFileNameWithoutExtension(filePath);
-                        var response = new
-                        {
-                            message = $"Access granted to {employeeName}",
-                            time = currentTime,
-                            name = employeeName
-                        };
-                        Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(response));  // Log the response
-                        return Ok(response);
-                    }
+                    return Ok(recognizedEmployee);
                 }
 
-                var unrecognizedResponse = new
+                return Ok(new
                 {
                     message = "Unrecognized person.\nSecurity has been alerted!",
                     time = currentTime
-                };
-                Console.WriteLine(Newtonsoft.Json.JsonConvert.SerializeObject(unrecognizedResponse));  // Log the response
-                return Ok(unrecognizedResponse);
+                });
             }
             catch (Exception ex)
             {
-                var errorResponse = new { message = "An error occurred during image recognition.", time = currentTime };
-                Console.WriteLine($"Unhandled error: {ex.Message}\n{Newtonsoft.Json.JsonConvert.SerializeObject(errorResponse)}");  // Log the error and response
-                return StatusCode(500, errorResponse); // Return internal server error
+                Console.WriteLine($"Unhandled error: {ex.Message}");
+                return StatusCode(500, new { message = "An error occurred during image recognition.", time = currentTime });
             }
         }
 
-        private async Task<byte[]> ConvertImageToByteArrayAsync(IFormFile image)
+        private async Task<object> RecognizeEmployeeAsync(byte[] uploadedImageData, string currentTime)
         {
-            using var stream = new MemoryStream();
-            await image.CopyToAsync(stream);
-            return await ResizeImageAsync(stream.ToArray());
-        }
+            foreach (var filePath in Directory.GetFiles(_imagesDir))
+            {
+                byte[] storedImageData;
+                try
+                {
+                    storedImageData = await _imageProcessingService.ConvertImageToByteArrayAsync(filePath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error processing file '{filePath}': {ex.Message}");
+                    continue;
+                }
 
-        private async Task<byte[]> ConvertImageToByteArrayAsync(string filePath)
-        {
-            var image = await System.IO.File.ReadAllBytesAsync(filePath);
-            return await ResizeImageAsync(image);
-        }
+                if (uploadedImageData.SequenceEqual(storedImageData))
+                {
+                    string employeeName = Path.GetFileNameWithoutExtension(filePath);
+                    return new
+                    {
+                        message = $"Access granted to {employeeName}",
+                        time = currentTime,
+                        name = employeeName
+                    };
+                }
+            }
 
-        private async Task<byte[]> ResizeImageAsync(byte[] imageBytes)
-        {
-            using var ms = new MemoryStream(imageBytes);
-            using var image = await Image.LoadAsync<Rgba32>(ms);
-            image.Mutate(x => x.Resize(200, 200));
-            using var output = new MemoryStream();
-            await image.SaveAsJpegAsync(output);
-            return output.ToArray();
+            return null;
         }
     }
 }
