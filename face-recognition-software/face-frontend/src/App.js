@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import './App.css';
 
 function App() {
-  const [isModelLoading, setIsModelLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState(null);
   const [result, setResult] = useState('');
   const [details, setDetails] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // Track loading state
 
-  const imageRef = useRef();
   const fileInputRef = useRef();
 
   const uploadImage = (e) => {
@@ -24,25 +23,24 @@ function App() {
     fileInputRef.current.click();
   };
 
-  useEffect(() => {
-    setIsModelLoading(true);
-    // Simulating model load (if needed in future)
-    setIsModelLoading(false);
-  }, []);
-
   const handleImageRecognition = async () => {
+    if (!fileInputRef.current.files[0]) {
+      setResult('No image selected.');
+      return;
+    }
+
     const formData = new FormData();
     formData.append('image', fileInputRef.current.files[0]);
 
+    setIsLoading(true); // Start loading
+
     try {
-        const response = await fetch('http://localhost:5000/api/ImageRecognition/upload', {
+        const response = await fetch('http://localhost:5217/api/ImageRecognition/upload', {
             method: 'POST',
             body: formData,
         });
 
         const data = await response.json();
-        console.log(data);  // Debug line to inspect the response
-
         setResult(data.message);
         setDetails(`Time: ${data.time}`);
         if (data.name) {
@@ -52,6 +50,8 @@ function App() {
         console.error('Error:', error);
         setResult('An error occurred. Please try again.');
         setDetails('');
+    } finally {
+        setIsLoading(false); // End loading
     }
   };
 
@@ -66,6 +66,7 @@ function App() {
           className="uploadInput"
           onChange={uploadImage}
           ref={fileInputRef}
+          style={{ display: 'none' }}
         />
         <button className="uploadImage" onClick={uploadTrigger}>
           Upload Image
@@ -73,20 +74,19 @@ function App() {
       </div>
       <div className="imageWrapper">
         <div className="imageContent">
-          <div className="imageArea">
-            {imageUrl && (
+          {imageUrl && (
+            <div className="imageArea">
               <img
                 src={imageUrl}
                 alt="Image Preview"
                 crossOrigin="anonymous"
-                ref={imageRef}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
         {imageUrl && (
-          <button className="button" onClick={handleImageRecognition}>
-            Check Employee
+          <button className="button" onClick={handleImageRecognition} disabled={isLoading}>
+            {isLoading ? 'Processing...' : 'Check Employee'}
           </button>
         )}
         {result && (

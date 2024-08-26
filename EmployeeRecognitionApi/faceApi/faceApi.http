@@ -1,0 +1,6 @@
+@faceApi_HostAddress = http://localhost:5217
+
+GET {{faceApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
